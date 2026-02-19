@@ -8,17 +8,17 @@ import re
 import openpyxl
 
 # ══════════════════════════════════════════════════════════════
-#  مولّد أوصاف عطور | Perfume Description Generator
-#  تطبيق عام - يمكن تخصيص اسم المتجر والرابط
+#  مولّد أوصاف عطور احترافي (نسخة SEO المتقدمة)
+#  متوافق مع سلة + Google Merchant + خيار تحديث الكل
 # ══════════════════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="مولّد أوصاف عطور",
-    page_icon="✨",
+    page_title="مولّد أوصاف عطور SEO",
+    page_icon="💎",
     layout="wide",
 )
 
-# ─── CSS ───
+# ─── CSS لتحسين الواجهة ───
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
@@ -53,9 +53,6 @@ h1{text-align:center!important;background:linear-gradient(135deg,#d4af37,#b8960c
 .fail-box{
     background:#fef2f2;border:2px solid #ef4444;border-radius:16px;padding:24px;text-align:center
 }
-.logo-area{text-align:center;padding:10px 0 20px}
-.logo-area h2{color:#d4af37;margin:0;font-size:24px}
-.logo-area p{color:#999;font-size:12px;margin:4px 0 0}
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,47 +68,47 @@ MODELS = {
     "Claude Sonnet 4": "anthropic/claude-sonnet-4",
 }
 
-# ─── Helper ───
+# ─── Helper Functions ───
 def is_empty(val) -> bool:
     if pd.isna(val):
         return True
     s = str(val).strip()
     return s in ("", "nan", "<p></p>", "<p><br></p>", "None", "<p> </p>")
 
+def fetch_notes(name: str, api_key: str, model: str, store_name: str) -> dict | None:
+    """جلب معلومات مفصلة وطويلة جداً لأغراض SEO"""
 
-def fetch_notes(name: str, api_key: str, model: str) -> dict | None:
-    """Get authentic fragrance notes via OpenRouter API."""
+    system_msg = """أنت خبير محتوى وتسويق إلكتروني (SEO Specialist) متخصص في العطور.
+مهمتك: كتابة محتوى تسويقي ثري، طويل، وجذاب لمحركات البحث (Google Merchant).
+المتطلبات:
+1. المعلومات يجب أن تكون دقيقة 100% بناءً على Fragrantica.
+2. اللغة عربية فصحى جذابة ومؤثرة.
+3. تجنب التكرار الممل، وركز على "تجربة المستخدم" و"المشاعر".
+4. أرجع النتيجة بصيغة JSON فقط."""
 
-    system_msg = """أنت خبير عطور محترف.
-مهمتك: البحث عن المكونات الحقيقية والمعلومات الدقيقة للعطور من مصادر موثوقة مثل Fragrantica و Parfumo.
-أرجع النتائج بصيغة JSON فقط — بدون أي نص إضافي وبدون backticks وبدون كلمة json."""
-
-    user_msg = f"""ابحث عن العطر التالي وأرجع معلوماته الحقيقية:
-
+    user_msg = f"""اكتب وصفاً احترافياً شاملاً للمنتج التالي:
 اسم المنتج: "{name}"
+اسم المتجر الذي سيبيع المنتج: "{store_name}"
 
-أرجع JSON بهذا الشكل بالضبط:
+أرجع JSON بهذا الهيكل بالضبط (تأكد أن النصوص طويلة وغنية):
 {{
+  "perfume_en": "الاسم الإنجليزي الكامل للعطر",
   "brand_ar": "اسم الماركة بالعربي",
-  "brand_en": "Brand name in English",
-  "perfume_en": "Full perfume name in English",
-  "year": "سنة الإصدار أو unknown",
-  "perfumer": "اسم العطّار أو unknown",
+  "year": "سنة الإصدار",
+  "perfumer": "اسم العطار",
   "family_ar": "العائلة العطرية بالعربي",
-  "family_en": "Fragrance family in English",
-  "gender": "رجالي أو نسائي أو للجنسين",
-  "concentration": "أو دو تواليت أو أو دو بارفيوم أو بارفيوم",
-  "concentration_en": "EDT أو EDP أو Parfum",
-  "top_ar": "النوتات العليا: وصف تفصيلي بالعربي مع ذكر كل مكون وتأثيره",
-  "heart_ar": "نوتات القلب: وصف تفصيلي بالعربي مع ذكر كل مكون وتأثيره",
-  "base_ar": "النوتات الأساسية: وصف تفصيلي بالعربي مع ذكر كل مكون وتأثيره",
-  "vibe_ar": "وصف الطابع العام للعطر في جملة واحدة",
-  "intro_ar": "مقدمة وصفية جذابة بالعربي 2-3 جمل تسويقية عن العطر",
-  "season_ar": "الموسم المناسب",
-  "occasion_ar": "المناسبات المناسبة"
+  "gender": "جنس العطر",
+  "concentration_ar": "التركيز بالعربي",
+  "intro_story": "مقدمة إبداعية طويلة (لا تقل عن 100 كلمة) تحكي قصة العطر، لمن صُمم، وما الشعور الذي يعطيه. استخدم كلمات مفتاحية قوية.",
+  "ingredients_desc": "شرح نصي مفصل للمكونات (ليس مجرد قائمة). اشرح كيف تتناغم المقدمة مع القلب والقاعدة (لا يقل عن 80 كلمة).",
+  "top_notes": "المكونات العليا",
+  "heart_notes": "المكونات الوسطى",
+  "base_notes": "المكونات الأساسية",
+  "usage_occasion": "شرح مفصل: متى يُستخدم هذا العطر؟ (صباحي/مسائي، فصول السنة، مناسبات رسمية/يومية) ولماذا؟",
+  "user_persona": "وصف للشخصية التي يناسبها هذا العطر (مثلاً: الرجل الجريء، المرأة العصرية..).",
+  "seo_keywords": "5 كلمات مفتاحية قوية مفصولة بفواصل"
 }}
-
-مهم: استخدم المكونات الحقيقية فقط من Fragrantica. لا تخمّن."""
+"""
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -126,225 +123,158 @@ def fetch_notes(name: str, api_key: str, model: str) -> dict | None:
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
         ],
-        "temperature": 0.15,
-        "max_tokens": 1500,
+        "temperature": 0.3, # زدت الحرارة قليلاً للإبداع في النصوص الطويلة
+        "max_tokens": 2500,
     }
 
     try:
         r = requests.post(API_URL, headers=headers, json=body, timeout=120)
-
         if r.status_code != 200:
-            # Show the actual error for debugging
-            err_body = r.text[:300]
-            st.warning(f"⚠️ API Error {r.status_code} for: {name[:40]}... → {err_body}")
+            st.warning(f"⚠️ API Error {r.status_code}")
             return None
-
         text = r.json()["choices"][0]["message"]["content"].strip()
-
-        # Clean markdown fences if present
         text = re.sub(r"^```(?:json)?\s*\n?", "", text)
         text = re.sub(r"\n?\s*```$", "", text)
-        text = text.strip()
-
         return json.loads(text)
-
-    except json.JSONDecodeError:
-        st.warning(f"⚠️ JSON parse error for: {name[:40]}...")
-        return None
-    except requests.exceptions.ConnectionError:
-        st.error("❌ خطأ اتصال بالإنترنت - تحقق من الشبكة")
-        return None
-    except requests.exceptions.Timeout:
-        st.warning(f"⚠️ انتهت مهلة الطلب: {name[:40]}...")
-        return None
     except Exception as e:
-        st.warning(f"⚠️ خطأ: {type(e).__name__}: {str(e)[:80]}")
         return None
 
+def build_html_salla(name: str, d: dict, store_name: str, store_link: str, store_bio: str) -> str:
+    """بناء HTML متوافق مع سلة بتنسيق احترافي وعناوين كبيرة"""
 
-def build_html(name: str, d: dict, store_name: str, store_link: str) -> str:
-    """Build HTML description — NO newlines, NO default longevity.
+    # استخراج البيانات
+    perfume_en = d.get("perfume_en", "")
+    intro_story = d.get("intro_story", "")
+    ingredients_desc = d.get("ingredients_desc", "")
+    usage = d.get("usage_occasion", "")
+    persona = d.get("user_persona", "")
     
-    If store_name/link are empty, no store references are added.
+    # تفاصيل تقنية
+    family = d.get("family_ar", "")
+    conc = d.get("concentration_ar", "")
+    year = d.get("year", "")
+    perfumer = d.get("perfumer", "")
+    
+    # نوتات
+    top = d.get("top_notes", "")
+    heart = d.get("heart_notes", "")
+    base = d.get("base_notes", "")
+
+    # روابط المتجر
+    if store_name and store_link:
+        store_ref = f'<a href="{store_link}" style="color: #d4af37; text-decoration: none; font-weight: bold;">{store_name}</a>'
+    elif store_name:
+        store_ref = f'<span style="color: #d4af37; font-weight: bold;">{store_name}</span>'
+    else:
+        store_ref = "المتجر"
+
+    # معالجة الحجم والتستر من الاسم
+    m = re.search(r"(\d+)\s*مل", name)
+    size = m.group(0) if m else "متوفر في خيارات المنتج"
+    is_tester = "تستر" in name or "tester" in name.lower()
+
+    # ─── بداية بناء كود HTML ───
+    # ملاحظة: نستخدم Inline CSS لضمان التوافق مع محرر سلة الذي قد يحذف كلاسات CSS الخارجية
+    
+    html = f"""
+    <div style="font-family: 'Tajawal', sans-serif; text-align: right; direction: rtl; line-height: 1.8; color: #333;">
+        
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            {intro_story} يقدمه لك {store_ref} ليكون إضافة فاخرة لمجموعتك الشخصية.
+        </p>
+
+        <h2 style="font-size: 24px; color: #b8960c; background-color: #fcfbf5; padding: 10px 15px; border-right: 5px solid #d4af37; border-radius: 4px; margin-top: 30px; margin-bottom: 15px;">
+            مواصفات العطر
+        </h2>
+        <ul style="list-style-type: none; padding-right: 10px; font-size: 15px;">
+            <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>🏷️ اسم الماركة:</strong> {d.get('brand_ar', '')}
+            </li>
+            <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>📦 الاسم بالإنجليزية:</strong> {perfume_en}
+            </li>
+            <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>💧 التركيز:</strong> {conc}
+            </li>
+            <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>📏 الحجم:</strong> {size}
+            </li>
+            <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>👃 العائلة العطرية:</strong> {family}
+            </li>
+             <li style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px;">
+                <strong>📅 سنة الإصدار:</strong> {year}
+            </li>
+        </ul>
+
+        <h2 style="font-size: 24px; color: #b8960c; background-color: #fcfbf5; padding: 10px 15px; border-right: 5px solid #d4af37; border-radius: 4px; margin-top: 30px; margin-bottom: 15px;">
+            الهرم العطري والمكونات
+        </h2>
+        <p style="margin-bottom: 15px;">{ingredients_desc}</p>
+        
+        <div style="background: #fafafa; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+            <p style="margin-bottom: 8px;"><strong>🍋 النوتات العليا (الافتتاحية):</strong><br> {top}</p>
+            <p style="margin-bottom: 8px;"><strong>🌸 النوتات الوسطى (القلب):</strong><br> {heart}</p>
+            <p style="margin-bottom: 0;"><strong>🪵 النوتات الأساسية (القاعدة):</strong><br> {base}</p>
+        </div>
+
+        <h2 style="font-size: 24px; color: #b8960c; background-color: #fcfbf5; padding: 10px 15px; border-right: 5px solid #d4af37; border-radius: 4px; margin-top: 30px; margin-bottom: 15px;">
+            متى تستخدم هذا العطر؟
+        </h2>
+        <p><strong>أوقات الاستخدام:</strong> {usage}</p>
+        <p><strong>هل يناسبني؟</strong> {persona}</p>
+
     """
 
-    perfume_en = d.get("perfume_en", "")
-    year       = d.get("year", "")
-    perfumer   = d.get("perfumer", "")
-    family_ar  = d.get("family_ar", "")
-    family_en  = d.get("family_en", "")
-    gender     = d.get("gender", "")
-    conc_ar    = d.get("concentration", "")
-    conc_en    = d.get("concentration_en", "")
-    top_ar     = d.get("top_ar", "")
-    heart_ar   = d.get("heart_ar", "")
-    base_ar    = d.get("base_ar", "")
-    vibe_ar    = d.get("vibe_ar", "")
-    intro_ar   = d.get("intro_ar", "")
-    season     = d.get("season_ar", "")
-    occasion   = d.get("occasion_ar", "")
-
-    # ─── Size extraction ───
-    m = re.search(r"(\d+)\s*مل", name)
-    size = m.group(0) if m else ""
-
-    # ─── Detect special types ───
-    is_tester = any(k in name for k in ("تستر", "بدون كرتون"))
-    is_hair = any(k in name.lower() for k in ("شعر", "hair", "معطر للشعر"))
-    ptype_text = "معطر الشعر" if is_hair else f"عطر {gender}" if gender else "عطر"
-
-    # ─── Store link (or empty) ───
-    if store_name and store_link:
-        a = f'<a href="{store_link}" style="color: #d4af37; font-weight: bold;">{store_name}</a>'
-    elif store_name:
-        a = f'<strong style="color: #d4af37;">{store_name}</strong>'
-    else:
-        a = ""
-
-    # ─── Build optional <li> items ───
-    opt = ""
-    if size:
-        opt += f"<li><strong>السعة:</strong> {size}</li>"
-    opt += f"<li><strong>نوع المنتج:</strong> {ptype_text}</li>"
+    # قسم التستر (يظهر فقط إذا كان تستر)
     if is_tester:
-        opt += "<li><strong>الحالة:</strong> تستر بدون علبة كرتون — المنتج أصلي 100%</li>"
-    if conc_ar:
-        c_display = f"{conc_ar} ({conc_en})" if conc_en else conc_ar
-        opt += f"<li><strong>التركيز:</strong> {c_display}</li>"
-    if family_ar:
-        f_display = f"{family_ar} ({family_en})" if family_en else family_ar
-        opt += f"<li><strong>العائلة العطرية:</strong> {f_display}</li>"
-    if perfumer and perfumer.lower() != "unknown":
-        opt += f"<li><strong>العطّار:</strong> {perfumer}</li>"
-    if year and year.lower() != "unknown":
-        opt += f"<li><strong>سنة الإصدار:</strong> {year}</li>"
+        html += """
+        <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 6px; color: #856404;">
+            <strong>⚠️ ملاحظة حول عطور التستر:</strong><br>
+            هذا المنتج هو "تستر" (Tester)، وهو النسخة الأصلية 100% التي توفرها الماركة للتجربة. يأتي عادةً بكرتون أبيض أو بني، وقد يأتي بدون غطاء أحياناً. هو خيار اقتصادي ممتاز للاستخدام الشخصي (نفس الرائحة والثبات) وأقل ملاءمة كهدية.
+        </div>
+        """
 
-    en_display = f" ({perfume_en})" if perfume_en else ""
+    # نبذة عن المتجر (الخاتمة)
+    if store_name and store_bio:
+        html += f"""
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
+        <div style="text-align: center; background: #fdfdfd; padding: 20px; border-radius: 10px;">
+            <h3 style="color: #d4af37; margin-bottom: 10px;">لماذا تتسوق من {store_name}؟</h3>
+            <p>{store_bio}</p>
+            <p style="margin-top: 10px;">
+                <a href="{store_link}" style="background-color: #d4af37; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">تصفح المزيد من العطور</a>
+            </p>
+        </div>
+        """
 
-    # ─── INTRO ───
-    html = f'<p>اكتشفوا تجربة فريدة من نوعها مع <strong>{name}</strong>، {intro_ar}'
-    if a:
-        html += f' يقدم لك {a} هذا العطر الفاخر بضمان الأصالة والجودة.'
-    html += '</p>'
-
-    # ─── تفاصيل المنتج (h2) ───
-    html += (
-        '<h2 style="background-color: #f9f9f9; border-right: 5px solid #d4af37; padding: 12px 15px; '
-        "font-family: 'Tajawal'; font-size: 20px; color: #333; margin-top: 25px; border-radius: 4px;\">"
-        'تفاصيل المنتج</h2>'
-        '<ul>'
-        f'<li><strong>الاسم:</strong> {name}{en_display}</li>'
-        f'{opt}'
-    )
-    if a:
-        html += f'<li><strong>متوفر عبر:</strong> {a}، وجهتك المثالية لكل ما يتعلق بالعطور الفاخرة</li>'
-    html += '</ul>'
-
-    # ─── رحلة العطر (h3) ───
-    html += (
-        '<h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; '
-        'padding-bottom: 5px; margin-top: 15px; display: inline-block;">'
-        'رحلة العطر - النفحات والمكونات</h3>'
-        '<ul>'
-    )
-    if top_ar:
-        html += f'<li><strong>النوتات العليا:</strong> {top_ar}</li>'
-    if heart_ar:
-        html += f'<li><strong>النوتات الوسطى:</strong> {heart_ar}</li>'
-    if base_ar:
-        html += f'<li><strong>النوتات الأساسية:</strong> {base_ar}</li>'
-    if vibe_ar:
-        html += f'<li><strong>الطابع العام:</strong> {vibe_ar}</li>'
-    html += '</ul>'
-
-    # ─── لماذا تختار (h3) ───
-    html += (
-        '<h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; '
-        'padding-bottom: 5px; margin-top: 15px; display: inline-block;">'
-        'لماذا تختار هذا العطر؟</h3>'
-        '<ul>'
-        '<li><strong>تجربة عطرية مميزة:</strong> تركيبة فاخرة من مكونات عطرية مختارة بعناية فائقة تعكس الذوق الرفيع.</li>'
-        '<li><strong>ثبات عالي:</strong> تركيبة متوازنة تضمن بقاء العطر لساعات طويلة دون الحاجة لإعادة الرش.</li>'
-    )
-    if occasion and season:
-        html += f'<li><strong>مناسب لـ:</strong> {occasion} في {season}.</li>'
-    elif occasion:
-        html += f'<li><strong>مناسب لـ:</strong> {occasion}.</li>'
-    if is_tester:
-        html += '<li><strong>سعر منافس:</strong> تستر أصلي بسعر اقتصادي مثالي للتجربة قبل الشراء.</li>'
-    if a:
-        html += f'<li><strong>متوفر حصرياً في:</strong> {a} حيث نضمن لك أفضل المنتجات وأعلى مستويات الخدمة.</li>'
-    html += '</ul>'
-
-    # ─── الأسئلة الشائعة (h3) ───
-    html += (
-        '<h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; '
-        'padding-bottom: 5px; margin-top: 15px; display: inline-block;">'
-        'الأسئلة الشائعة</h3>'
-        '<ul>'
-        '<li><strong>هل العطر مناسب للاستخدام اليومي؟</strong><br>'
-        'نعم، العطر متوازن ومناسب للاستخدام اليومي بفضل طابعه الأنيق والمتوازن.</li>'
-    )
-    if is_tester:
-        html += (
-            '<li><strong>هل هذا التستر مزود بعلبة كرتون؟</strong><br>'
-            'هذا الإصدار يأتي بدون علبة كرتون لتوفير تجربة عطرية أصلية وبسعر اقتصادي.</li>'
-        )
-    html += (
-        '<li><strong>ما مدى ثبات العطر على الجلد؟</strong><br>'
-        'يتميز العطر بثبات عالي يدوم لساعات طويلة مع رائحة متجددة طوال اليوم.</li>'
-    )
-    if a:
-        html += (
-            f'<li><strong>هل المنتج أصلي؟</strong><br>'
-            f'نعم، جميع منتجات {a} أصلية 100% مع ضمان ذهبي للأصالة والجودة.</li>'
-        )
-    html += '</ul>'
-
-    # ─── CLOSING ───
-    html += f'<p>مع <strong>{name}</strong>'
-    if a:
-        html += f' من {a}،'
-    html += ' أنت تضمن تجربة عطرية راقية لا تضاهى مع جودة عالية وضمان الأصالة.'
-    if store_name:
-        html += f' نحن في <strong>{store_name}</strong> نلتزم بتقديم أفضل العطور الأصلية مع ضمان ذهبي للرضا التام.'
-        html += f' اختر التميز، اختر {a}.'
-    html += '</p>'
-
-    # CRITICAL: Remove any accidental newlines
+    html += "</div>"
+    
+    # تنظيف
     html = html.replace("\n", "").replace("\r", "")
-
     return html
 
-
-def process_file(uploaded, api_key, model, store_name, store_link, bar, status):
-    """Process Excel: find empty descriptions, generate HTML, save back."""
+def process_file(uploaded, api_key, model, store_name, store_link, store_bio, process_all, bar, status):
     raw = uploaded.getvalue()
     wb = openpyxl.load_workbook(io.BytesIO(raw))
     ws = wb.active
     df = pd.read_excel(io.BytesIO(raw), header=1)
 
     cols = list(df.columns)
-
-    # Find الوصف column
-    if "الوصف" not in cols:
-        st.error("❌ الملف لا يحتوي على عمود 'الوصف'")
-        return None, [], 0
-
-    if "أسم المنتج" not in cols:
-        st.error("❌ الملف لا يحتوي على عمود 'أسم المنتج'")
+    if "الوصف" not in cols or "أسم المنتج" not in cols:
+        st.error("❌ تأكد من وجود أعمدة: 'أسم المنتج' و 'الوصف'")
         return None, [], 0
 
     desc_col = cols.index("الوصف") + 1
-    name_col = cols.index("أسم المنتج") + 1
-
-    # Collect empty rows
+    
     tasks = []
     for i, row in df.iterrows():
-        if is_empty(row["الوصف"]):
-            n = str(row["أسم المنتج"]).strip()
-            if n and n != "nan":
-                tasks.append((i, n))
+        # المنطق الجديد: إذا "تحديث الكل" مفعّل نأخذ الكل، وإلا نأخذ الفارغ فقط
+        should_process = process_all or is_empty(row["الوصف"])
+        
+        n = str(row["أسم المنتج"]).strip()
+        if should_process and n and n != "nan":
+            tasks.append((i, n))
 
     total = len(tasks)
     if total == 0:
@@ -357,22 +287,22 @@ def process_file(uploaded, api_key, model, store_name, store_link, bar, status):
         pct = (idx + 1) / total
         bar.progress(pct)
         status.markdown(
-            f'<div class="product-item">⏳ <strong>({idx+1}/{total})</strong> {pname[:60]}</div>',
+            f'<div class="product-item">⏳ <strong>جاري الكتابة ({idx+1}/{total})</strong><br>{pname}</div>',
             unsafe_allow_html=True,
         )
 
-        notes = fetch_notes(pname, api_key, model)
+        data = fetch_notes(pname, api_key, model, store_name)
 
-        if notes:
-            html = build_html(pname, notes, store_name, store_link)
-            excel_row = row_i + 3  # header offset in openpyxl
+        if data:
+            html = build_html_salla(pname, data, store_name, store_link, store_bio)
+            excel_row = row_i + 3
+            # مسح المحتوى القديم وكتابة الجديد
             ws.cell(row=excel_row, column=desc_col).value = html
-            results.append({"name": pname, "ok": True, "data": notes})
+            results.append({"name": pname, "ok": True})
             success += 1
         else:
-            results.append({"name": pname, "ok": False, "data": None})
-
-        # Rate limit
+            results.append({"name": pname, "ok": False})
+        
         time.sleep(1.5)
 
     buf = io.BytesIO()
@@ -380,286 +310,89 @@ def process_file(uploaded, api_key, model, store_name, store_link, bar, status):
     buf.seek(0)
     return buf, results, success
 
-
-def test_api(api_key: str, model: str) -> tuple[bool, str]:
-    """Quick test of API connectivity."""
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://perfume-desc-generator.streamlit.app",
-        "X-Title": "Perfume Description Generator",
-    }
-    body = {
-        "model": model,
-        "messages": [{"role": "user", "content": "قل مرحبا بكلمة واحدة فقط"}],
-        "temperature": 0.1,
-        "max_tokens": 20,
-    }
+def test_api(api_key, model):
+    # دالة اختبار بسيطة (نفس القديمة)
     try:
-        r = requests.post(API_URL, headers=headers, json=body, timeout=30)
-        if r.status_code == 200:
-            reply = r.json()["choices"][0]["message"]["content"].strip()
-            return True, f"✅ الاتصال ناجح! الرد: {reply}"
-        else:
-            return False, f"❌ خطأ {r.status_code}: {r.text[:200]}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        body = {"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 5}
+        r = requests.post(API_URL, headers=headers, json=body, timeout=10)
+        return r.status_code == 200, "اتصال ناجح" if r.status_code == 200 else f"Error {r.status_code}"
     except Exception as e:
-        return False, f"❌ {type(e).__name__}: {str(e)[:150]}"
-
+        return False, str(e)
 
 # ══════════════════════════════════════════════════════════════
-#  UI
+#  واجهة التطبيق (UI)
 # ══════════════════════════════════════════════════════════════
 
-# ─── Sidebar ───
 with st.sidebar:
-    st.markdown("""
-    <div class="logo-area">
-        <h2>✨ مولّد الأوصاف الذكي</h2>
-        <p>Perfume Description Generator</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### ⚙️ إعدادات API")
-
-    api_key = st.text_input(
-        "🔑 مفتاح OpenRouter API",
-        type="password",
-        help="احصل على مفتاح مجاني من openrouter.ai",
-    )
-
-    model_name = st.selectbox(
-        "🤖 النموذج",
-        list(MODELS.keys()),
-        index=0,
-        help="Gemini Flash مجاني وسريع",
-    )
-    model_id = MODELS[model_name]
-
-    # Test button
-    if api_key:
-        if st.button("🔌 اختبار الاتصال", use_container_width=True):
-            with st.spinner("جاري الاختبار..."):
-                ok, msg = test_api(api_key, model_id)
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
+    st.markdown("### ⚙️ الإعدادات")
+    api_key = st.text_input("مفتاح API", type="password")
+    model_name = st.selectbox("النموذج", list(MODELS.keys()))
+    
+    if st.button("اختبار الاتصال"):
+        ok, msg = test_api(api_key, MODELS[model_name])
+        if ok: st.success(msg)
+        else: st.error(msg)
 
     st.markdown("---")
-    st.markdown("### 🏪 إعدادات المتجر (اختياري)")
-
-    store_name = st.text_input(
-        "اسم المتجر",
-        value="",
-        placeholder="مثال: لي غابريال",
-        help="اتركه فارغاً إذا لم ترد إضافة اسم متجر",
-    )
-    store_link = st.text_input(
-        "رابط المتجر",
-        value="",
-        placeholder="مثال: https://legabreil.com/ar",
-        help="اتركه فارغاً إذا لم ترد إضافة رابط",
+    st.markdown("### 🏪 بيانات المتجر")
+    store_name = st.text_input("اسم المتجر", value="اسم متجرك")
+    store_link = st.text_input("رابط المتجر", placeholder="https://...")
+    store_bio = st.text_area(
+        "نبذة عن المتجر (ستظهر أسفل كل وصف)",
+        value="نحن متجر سعودي متخصص في العطور الأصلية والنيش، نسعى لتقديم تجربة عطرية فاخرة بضمان ذهبي وأسعار منافسة.",
+        height=100
     )
 
     st.markdown("---")
-    st.markdown("### 📌 المميزات")
-    st.markdown("""
-- ✅ مكونات حقيقية من Fragrantica
-- ✅ تنسيق HTML متوافق مع سلّة
-- ✅ **بدون فراغات** بين الأسطر
-- ✅ اسم المتجر والرابط (اختياري)
-- ✅ أقسام: تفاصيل، مكونات، FAQ
-- ✅ دعم التستر وعطور الشعر
-- ✅ **بدون مدة ثبات افتراضية**
-    """)
-
-    st.markdown("---")
-    st.markdown("### 📋 الخطوات")
-    st.markdown("""
-1. أدخل مفتاح **OpenRouter API**
-2. (اختياري) أدخل اسم المتجر والرابط
-3. ارفع ملف **Excel**
-4. اضغط **توليد الأوصاف**
-5. حمّل الملف المحدّث ✅
-    """)
-
-# ─── Main ───
-st.markdown("<h1>✨ مولّد أوصاف العطور</h1>", unsafe_allow_html=True)
-
-subtitle = "توليد أوصاف HTML احترافية بمكونات حقيقية — متوافق مع منصة سلّة — بدون فراغات بين الصفوف"
-st.markdown(
-    f'<p style="text-align:center;color:#888;font-size:15px;margin-top:-10px">{subtitle}</p>',
-    unsafe_allow_html=True,
-)
-
-# Store info banner
-if store_name:
-    st.markdown(
-        f'<div style="background:#f9f6ec;border-right:5px solid #d4af37;border-radius:8px;'
-        f'padding:10px 16px;margin:10px 0;font-size:14px">'
-        f'🏪 المتجر: <strong>{store_name}</strong>'
-        + (f' | 🔗 <a href="{store_link}" target="_blank">{store_link}</a>' if store_link else "")
-        + "</div>",
-        unsafe_allow_html=True,
+    st.markdown("### 🎯 خيارات المعالجة")
+    process_mode = st.radio(
+        "أي المنتجات تريد معالجتها؟",
+        ["المنتجات التي ليس لها وصف فقط (تكملة)", "تحديث جميع المنتجات (إعادة كتابة الكل)"],
+        index=0
     )
+    process_all = (process_mode == "تحديث جميع المنتجات (إعادة كتابة الكل)")
 
-st.markdown("")
+st.title("✨ مولّد أوصاف العطور الاحترافي (SEO)")
+st.info("💡 هذا الإصدار يدعم كتابة مقالات طويلة، توافق تام مع سلة، وإمكانية تحديث جميع المنتجات.")
 
-# Upload
-uploaded = st.file_uploader(
-    "📁 ارفع ملف Excel (.xlsx)",
-    type=["xlsx", "xls"],
-    help="ملف منتجات يحتوي عمود 'أسم المنتج' و 'الوصف'",
-)
+uploaded = st.file_uploader("ارفع ملف المنتجات (Excel)", type=["xlsx"])
 
 if uploaded:
-    try:
-        df_preview = pd.read_excel(uploaded, header=1)
-    except Exception as e:
-        st.error(f"❌ خطأ في قراءة الملف: {str(e)[:100]}")
-        st.stop()
-
-    if "الوصف" not in df_preview.columns or "أسم المنتج" not in df_preview.columns:
-        st.error("❌ الملف لا يحتوي على الأعمدة المطلوبة: **أسم المنتج** و **الوصف**")
-        st.stop()
-
-    empty_mask = df_preview["الوصف"].apply(is_empty)
-    n_empty = int(empty_mask.sum())
-    n_total = len(df_preview)
-    n_done = n_total - n_empty
-
-    # ─── Stats ───
-    st.markdown("")
+    df = pd.read_excel(uploaded, header=1)
+    
+    # إحصائيات سريعة
+    total_products = len(df)
+    empty_desc = df["الوصف"].apply(is_empty).sum()
+    
     c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            f'<div class="stat-card"><div class="stat-num">{n_total:,}</div>'
-            f'<div class="stat-label">📦 إجمالي المنتجات</div></div>',
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            f'<div class="stat-card"><div class="stat-num" style="color:#ef4444">{n_empty}</div>'
-            f'<div class="stat-label">📝 بدون وصف</div></div>',
-            unsafe_allow_html=True,
-        )
-    with c3:
-        st.markdown(
-            f'<div class="stat-card"><div class="stat-num" style="color:#22c55e">{n_done:,}</div>'
-            f'<div class="stat-label">✅ مكتملة</div></div>',
-            unsafe_allow_html=True,
-        )
+    c1.metric("إجمالي المنتجات", total_products)
+    c2.metric("بدون وصف", empty_desc)
+    
+    target_count = total_products if process_all else empty_desc
+    c3.metric("العدد المستهدف للمعالجة", target_count)
 
-    if n_empty > 0:
-        # ─── List empty products ───
-        st.markdown("")
-        with st.expander(f"👁️ عرض المنتجات بدون وصف ({n_empty} منتج)", expanded=True):
-            empties = df_preview[empty_mask][["أسم المنتج", "سعر المنتج"]].reset_index(drop=True)
-            for i, row in empties.iterrows():
-                price = row["سعر المنتج"]
-                price_str = f"{price:,.2f} ر.س" if pd.notna(price) else ""
-                st.markdown(
-                    f'<div class="product-item">'
-                    f"<strong>{i+1}.</strong> {row['أسم المنتج']} — {price_str}"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-        # ─── Generate button ───
-        st.markdown("")
-        if st.button("🪄 توليد الأوصاف الآن", use_container_width=True):
-            if not api_key:
-                st.error("❌ الرجاء إدخال مفتاح OpenRouter API في الشريط الجانبي")
-            else:
-                st.markdown("---")
-                bar = st.progress(0)
-                status = st.empty()
-
-                buf, results, ok_count = process_file(
-                    uploaded, api_key, model_id, store_name, store_link, bar, status
-                )
-
-                if buf:
-                    bar.progress(1.0)
-                    fail_count = len(results) - ok_count
-                    status.empty()
-
-                    if ok_count > 0:
-                        st.markdown(
-                            f'<div class="done-box">'
-                            f'<h2 style="color:#22c55e;margin:0">✅ تم بنجاح!</h2>'
-                            f'<p style="font-size:20px;margin:10px 0">'
-                            f"نجح: <strong>{ok_count}</strong> &nbsp;|&nbsp; "
-                            f"فشل: <strong>{fail_count}</strong></p></div>",
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.markdown(
-                            '<div class="fail-box">'
-                            '<h2 style="color:#ef4444;margin:0">❌ فشلت جميع المحاولات</h2>'
-                            "<p>تحقق من مفتاح API والنموذج المختار — جرّب زر اختبار الاتصال</p></div>",
-                            unsafe_allow_html=True,
-                        )
-
-                    # Detailed results
-                    with st.expander("📋 تفاصيل النتائج"):
-                        for r in results:
-                            icon = "✅" if r["ok"] else "❌"
-                            st.markdown(f"**{icon}** {r['name'][:70]}")
-                            if r.get("data"):
-                                dd = r["data"]
-                                st.caption(
-                                    f"🏷️ {dd.get('family_ar', '')} | "
-                                    f"{dd.get('top_ar', '')[:50]}..."
-                                )
-
-                    # Download
-                    st.markdown("")
-                    st.download_button(
-                        "📥 تحميل الملف المحدّث",
-                        data=buf,
-                        file_name="منتجات_محدثة.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                    )
-                else:
-                    st.info("✅ جميع المنتجات مكتملة بالفعل!")
-    else:
-        st.markdown("")
-        st.success("🎉 ممتاز! جميع المنتجات تحتوي على أوصاف بالفعل.")
-
-
-# ─── Preview ───
-st.markdown("---")
-with st.expander("👁️ معاينة تنسيق الوصف النهائي"):
-    preview_store = store_name if store_name else "اسم المتجر"
-    preview_link = store_link if store_link else "#"
-    pa = f'<a href="{preview_link}" style="color: #d4af37; font-weight: bold;">{preview_store}</a>'
-
-    st.markdown(f"""
-<div style="background:#fafafa;padding:20px;border-radius:10px;direction:rtl;line-height:1.9">
-<p>اكتشفوا تجربة فريدة مع <strong>اسم العطر</strong>، مقدمة وصفية جذابة...
-يقدم لك {pa} هذا العطر الفاخر.</p>
-<h2 style="background:#f9f9f9;border-right:5px solid #d4af37;padding:12px 15px;
-font-size:20px;color:#333;border-radius:4px">تفاصيل المنتج</h2>
-<ul><li><strong>الاسم:</strong> العطر (English Name)</li>
-<li><strong>العائلة العطرية:</strong> شرقي خشبي (Oriental Woody)</li></ul>
-<h3 style="font-size:18px;color:#d4af37;border-bottom:1px solid #eee;
-padding-bottom:5px;display:inline-block">رحلة العطر - النفحات والمكونات</h3>
-<ul><li><strong>النوتات العليا:</strong> مكونات حقيقية...</li>
-<li><strong>النوتات الوسطى:</strong> مكونات حقيقية...</li>
-<li><strong>النوتات الأساسية:</strong> مكونات حقيقية...</li></ul>
-<h3 style="font-size:18px;color:#d4af37;border-bottom:1px solid #eee;
-padding-bottom:5px;display:inline-block">لماذا تختار هذا العطر؟</h3>
-<h3 style="font-size:18px;color:#d4af37;border-bottom:1px solid #eee;
-padding-bottom:5px;display:inline-block">الأسئلة الشائعة</h3>
-</div>
-    """, unsafe_allow_html=True)
-
-# Footer
-st.markdown(
-    '<p style="text-align:center;color:#ccc;font-size:11px;margin-top:40px">'
-    "✨ مولّد أوصاف العطور | مكونات حقيقية | متوافق مع سلّة | بدون فراغات"
-    "</p>",
-    unsafe_allow_html=True,
-)
+    if st.button("🚀 ابدأ المعالجة الآن", type="primary"):
+        if not api_key:
+            st.error("الرجاء إدخال مفتاح API")
+        elif target_count == 0:
+            st.warning("لا توجد منتجات للمعالجة بناءً على اختيارك.")
+        else:
+            bar = st.progress(0)
+            status = st.empty()
+            
+            buf, results, success = process_file(
+                uploaded, api_key, MODELS[model_name], 
+                store_name, store_link, store_bio, process_all, bar, status
+            )
+            
+            bar.progress(100)
+            status.success(f"تمت العملية! نجح: {success} | فشل: {len(results)-success}")
+            
+            st.download_button(
+                "📥 تحميل الملف الجاهز",
+                data=buf,
+                file_name="products_updated_seo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
