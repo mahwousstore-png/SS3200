@@ -31,6 +31,13 @@ st.markdown("""
 
 API_URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 
+# ─── دوال المساعدة ───
+def is_empty(val) -> bool:
+    """دالة فحص الحقل الفارغ (تمت إعادتها)"""
+    if pd.isna(val):
+        return True
+    return str(val).strip() in ("", "nan", "<p></p>", "<p><br></p>", "None", "<p> </p>")
+
 # ─── 1. التنسيق المبسط لمنصة سلة ───
 def build_simple_salla_html(name: str, d: dict, store_name: str, store_link: str) -> str:
     """كود HTML خفيف ومبسط جداً يناسب سلة بدون ثقل في التصفح"""
@@ -38,7 +45,6 @@ def build_simple_salla_html(name: str, d: dict, store_name: str, store_link: str
     m = re.search(r"(\d+)\s*مل", name)
     size = m.group(0) if m else "حسب الاختيار"
 
-    # تنسيق CSS مدمج مبسط
     h2_style = "background:#f9f9f9;border-right:4px solid #d4af37;padding:8px 12px;font-size:18px;color:#333;margin:20px 0 10px;border-radius:3px;"
     h3_style = "font-size:16px;color:#d4af37;border-bottom:1px solid #eee;padding-bottom:5px;margin:15px 0 10px;display:inline-block;"
     ul_style = "padding-right:20px;margin-bottom:15px;font-size:15px;"
@@ -67,12 +73,11 @@ def build_simple_salla_html(name: str, d: dict, store_name: str, store_link: str
 </ul>
 <h3 style="{h3_style}">الأسئلة الشائعة</h3>
 <ul style="{ul_style}">
-<li><strong>{d.get('faq_1_q', '')}</strong><br>{d.get('faq_1_a', '')}</li>
+<li><strong>{d.get('faq_1_q', 'هل العطر مناسب للاستخدام اليومي؟')}</strong><br>{d.get('faq_1_a', '')}</li>
 <li><strong>{d.get('faq_3_q', 'ما مدى الثبات؟')}</strong><br>{d.get('faq_3_a', '')}</li>
 </ul>
 <p>{d.get('closing_paragraph', '')} اختر {a_tag}.</p></div>"""
     
-    # تنظيف الكود ليكون سطر واحد خفيف
     return re.sub(r'\s{2,}', ' ', html.replace("\n", "").replace("\r", ""))
 
 # ─── 2. محرك الذكاء الاصطناعي ───
@@ -136,13 +141,11 @@ async def run_background_job(tasks, active_keys, model, store_name, store_link, 
             if res["ok"]: success += 1
             else: failed += 1
 
-            # تحديث الشاشة الحية (Dashboard)
             ui_components['prog'].progress(completed / total)
             ui_components['comp'].markdown(f"<div class='dash-value'>{completed} / {total}</div>", unsafe_allow_html=True)
             ui_components['succ'].markdown(f"<div class='dash-value' style='color:#10b981;'>{success}</div>", unsafe_allow_html=True)
             ui_components['fail'].markdown(f"<div class='dash-value' style='color:#ef4444;'>{failed}</div>", unsafe_allow_html=True)
             
-            # تحديث السجل الحي
             log_messages.insert(0, f"[{completed}/{total}] {'✅' if res['ok'] else '❌'} {res['name']}")
             if len(log_messages) > 5: log_messages.pop()
             ui_components['log'].markdown(f"<div class='log-box'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
@@ -183,7 +186,6 @@ if uploaded:
     if st.button("🚀 بدء المعالجة الشاملة الآن", type="primary"):
         if not active_keys: st.error("❌ أدخل مفتاح API واحد على الأقل.")
         else:
-            # بناء لوحة التحكم
             st.markdown("### 📊 لوحة المراقبة الحية (تعمل في الخلفية)")
             prog_bar = st.progress(0)
             c1, c2, c3 = st.columns(3)
@@ -206,7 +208,6 @@ if uploaded:
 
             ui_components = {'prog': prog_bar, 'comp': comp_st, 'succ': succ_st, 'fail': fail_st, 'log': log_st}
 
-            # تشغيل العملية في الخلفية باستخدام asyncio
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
