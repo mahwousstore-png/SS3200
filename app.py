@@ -7,10 +7,11 @@ import re
 import openpyxl
 import asyncio
 import aiohttp
+import base64
 
 # ══════════════════════════════════════════════════════════════
-#  مولّد أوصاف عطور احترافي (النسخة الصاروخية Asynchronous)
-#  متوافق مع سلة 100% | معالجة متزامنة | إعادة محاولة ذكية
+#  مولّد أوصاف عطور احترافي (النسخة الصاروخية + التحميل الحي)
+#  دعم مفاتيح لا نهائية | تحميل بدون توقف | متوافق مع سلة 100%
 # ══════════════════════════════════════════════════════════════
 
 st.set_page_config(
@@ -39,6 +40,24 @@ h1{text-align:center!important;background:linear-gradient(135deg,#d4af37,#b8960c
     background:#fafafa;border-left:4px solid #d4af37;
     border-radius:8px;padding:10px 16px;margin:5px 0;font-size:14px
 }
+.live-download-btn {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff !important;
+    padding: 15px 30px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: bold;
+    display: block;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(34,197,94,0.3);
+    margin: 20px 0;
+    transition: all 0.3s ease;
+}
+.live-download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(34,197,94,0.4);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,37 +74,33 @@ MODELS = {
 def is_empty(val) -> bool:
     if pd.isna(val):
         return True
-    s = str(val).strip()
-    return s in ("", "nan", "<p></p>", "<p><br></p>", "None", "<p> </p>")
+    return str(val).strip() in ("", "nan", "<p></p>", "<p><br></p>", "None", "<p> </p>")
 
 def get_api_provider(api_key: str) -> str:
     if api_key.startswith("AIza"):
         return "google"
     return "openrouter"
 
+def get_realtime_download_link(wb, completed, total):
+    """يولد رابط تحميل حي دون إيقاف البرنامج"""
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode()
+    return f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="منتجات_جاهزة_{completed}_من_{total}.xlsx" class="live-download-btn">📥 تحميل الملف الآن (المنجز: {completed}) - يعمل دون إيقاف العملية!</a>'
+
 # ─── Asynchronous Core ───
 async def fetch_notes_async(session, name: str, api_key: str, model: str, store_name: str, provider: str, semaphore):
-    """جلب المعلومات بسرعة صاروخية مع نظام إعادة المحاولة عند الفشل"""
-    
     system_msg = """أنت خبير محتوى وتسويق إلكتروني متخصص في العطور الفاخرة.
 مهمتك: كتابة محتوى تسويقي احترافي، دقيق بناءً على Fragrantica، وطويل جداً (أكثر من 2000 حرف).
 أرجع النتيجة بصيغة JSON فقط وبدون أي نص إضافي:
 {
-  "perfume_en": "الاسم الإنجليزي الكامل",
-  "perfume_ar": "الاسم العربي الكامل",
-  "type": "نوع العطر",
-  "concentration": "التركيز",
-  "family": "العائلة العطرية",
-  "perfumer": "اسم العطار الحقيقي",
-  "year": "سنة الإصدار",
+  "perfume_en": "الاسم الإنجليزي", "perfume_ar": "الاسم العربي", "type": "النوع",
+  "concentration": "التركيز", "family": "العائلة العطرية", "perfumer": "اسم العطار", "year": "سنة الإصدار",
   "intro_paragraph": "مقدمة تسويقية إبداعية وسردية طويلة جداً.",
-  "top_notes": "وصف طويل للنوتات العليا",
-  "heart_notes": "وصف طويل للنوتات الوسطى",
-  "base_notes": "وصف طويل للنوتات الأساسية ومدى ثباتها",
+  "top_notes": "وصف طويل للنوتات العليا", "heart_notes": "وصف طويل للنوتات الوسطى", "base_notes": "وصف طويل للنوتات الأساسية ومدى ثباتها",
   "general_vibe": "الطابع العام للعطر في جملتين",
-  "why_choose_1": "سبب أول قوي مع شرح",
-  "why_choose_2": "سبب ثاني مع تفصيل",
-  "why_choose_3": "سبب ثالث مع تفصيل",
+  "why_choose_1": "سبب أول قوي مع شرح", "why_choose_2": "سبب ثاني مع تفصيل", "why_choose_3": "سبب ثالث مع تفصيل",
   "faq_1_q": "سؤال شائع 1", "faq_1_a": "إجابة 1",
   "faq_2_q": "سؤال شائع 2", "faq_2_a": "إجابة 2",
   "faq_3_q": "سؤال شائع 3", "faq_3_a": "إجابة 3",
@@ -94,60 +109,39 @@ async def fetch_notes_async(session, name: str, api_key: str, model: str, store_
 
     user_msg = f'اكتب وصفاً احترافياً مطولاً (أكثر من 2000 حرف) للمنتج: "{name}" لمتجر "{store_name}".'
 
-    # استخدام إشارة المرور (Semaphore) لمنع إغراق السيرفرات بالطلبات دفعة واحدة
     async with semaphore:
-        # نظام إعادة المحاولة (يُحاول 3 مرات كحد أقصى)
         for attempt in range(3):
             try:
                 if provider == "google":
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
                     headers = {"Content-Type": "application/json"}
-                    body = {
-                        "contents": [{"role": "user", "parts": [{"text": system_msg + "\n\n" + user_msg}]}],
-                        "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
-                    }
+                    body = {"contents": [{"role": "user", "parts": [{"text": system_msg + "\n\n" + user_msg}]}], "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}}
                     async with session.post(url, headers=headers, json=body) as response:
                         if response.status != 200:
-                            await asyncio.sleep(2 ** attempt) # انتظار تصاعدي قبل المحاولة القادمة
+                            await asyncio.sleep(1 + attempt)
                             continue
                         res_json = await response.json()
                         text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                
-                else: # OpenRouter
-                    headers = {
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://perfume-desc-generator.streamlit.app",
-                    }
-                    body = {
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": system_msg},
-                            {"role": "user", "content": user_msg},
-                        ],
-                        "temperature": 0.4, "max_tokens": 3000,
-                    }
+                else: 
+                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://perfume-desc-generator.streamlit.app"}
+                    body = {"model": model, "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": user_msg}], "temperature": 0.4, "max_tokens": 3000}
                     async with session.post(API_URL_OPENROUTER, headers=headers, json=body) as response:
                         if response.status != 200:
-                            await asyncio.sleep(2 ** attempt)
+                            await asyncio.sleep(1 + attempt)
                             continue
                         res_json = await response.json()
                         text = res_json["choices"][0]["message"]["content"].strip()
 
-                # استخراج JSON وتجاهل الأخطاء النصية
                 match = re.search(r'\{.*\}', text, re.DOTALL)
                 if match:
                     parsed_data = json.loads(match.group(0))
                     if isinstance(parsed_data, dict):
                         return parsed_data
-            
-            except Exception as e:
-                await asyncio.sleep(2 ** attempt)
-                
-        return None # إذا فشلت كل المحاولات
+            except Exception:
+                await asyncio.sleep(1 + attempt)
+        return None 
 
 def build_html_salla(name: str, d: dict, store_name: str, store_link: str) -> str:
-    """بناء HTML وتصفيته من الفراغات والأسطر الجديدة كلياً"""
     a_tag = f'<a href="{store_link}" style="color: #d4af37; font-weight: bold; text-decoration: none;">{store_name}</a>' if store_name and store_link else f'<strong style="color: #d4af37;">{store_name}</strong>'
     m = re.search(r"(\d+)\s*مل", name)
     size = m.group(0) if m else "حسب الاختيار المتاح"
@@ -155,7 +149,6 @@ def build_html_salla(name: str, d: dict, store_name: str, store_link: str) -> st
     html = f"""
 <div style="font-family: 'Tajawal', 'Arial', sans-serif; color: #333; line-height: 1.8; text-align: right; direction: rtl;">
 <p style="margin-bottom: 15px;">{d.get('intro_paragraph', '')} يقدم لك {a_tag} هذا العطر الفاخر لتكتمل أناقتك.</p>
-
 <h2 style="background-color: #f9f9f9; border-right: 5px solid #d4af37; padding: 12px 15px; font-size: 20px; color: #333; margin-top: 25px; margin-bottom: 15px; border-radius: 4px;">تفاصيل المنتج</h2>
 <ul style="padding-right: 20px; margin-bottom: 15px;">
   <li style="margin-bottom: 8px;"><strong>الاسم:</strong> {d.get('perfume_ar', name)} ({d.get('perfume_en', '')})</li>
@@ -165,9 +158,8 @@ def build_html_salla(name: str, d: dict, store_name: str, store_link: str) -> st
   <li style="margin-bottom: 8px;"><strong>العائلة العطرية:</strong> {d.get('family', '')}</li>
   <li style="margin-bottom: 8px;"><strong>العطّار:</strong> {d.get('perfumer', '')}</li>
   <li style="margin-bottom: 8px;"><strong>سنة الإصدار:</strong> {d.get('year', '')}</li>
-  <li style="margin-bottom: 8px;"><strong>متوفر عبر:</strong> {a_tag}، وجهتك المثالية لكل ما يتعلق بالعطور الفاخرة</li>
+  <li style="margin-bottom: 8px;"><strong>متوفر عبر:</strong> {a_tag}</li>
 </ul>
-
 <h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px; margin-bottom: 10px; display: inline-block;">رحلة العطر - النفحات والمكونات</h3>
 <ul style="padding-right: 20px; margin-bottom: 15px;">
   <li style="margin-bottom: 8px;"><strong>النوتات العليا:</strong> {d.get('top_notes', '')}</li>
@@ -175,33 +167,26 @@ def build_html_salla(name: str, d: dict, store_name: str, store_link: str) -> st
   <li style="margin-bottom: 8px;"><strong>النوتات الأساسية:</strong> {d.get('base_notes', '')}</li>
   <li style="margin-bottom: 8px;"><strong>الطابع العام:</strong> {d.get('general_vibe', '')}</li>
 </ul>
-
 <h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px; margin-bottom: 10px; display: inline-block;">لماذا تختار هذا العطر؟</h3>
 <ul style="padding-right: 20px; margin-bottom: 15px;">
   <li style="margin-bottom: 8px;"><strong>تميز وانفراد:</strong> {d.get('why_choose_1', '')}</li>
   <li style="margin-bottom: 8px;"><strong>جودة وثبات:</strong> {d.get('why_choose_2', '')}</li>
   <li style="margin-bottom: 8px;"><strong>تعدد المناسبات:</strong> {d.get('why_choose_3', '')}</li>
-  <li style="margin-bottom: 8px;"><strong>متوفر حصرياً في:</strong> {a_tag} حيث نضمن لك الأصالة 100% وأفضل الأسعار مع خدمة توصيل سريعة.</li>
 </ul>
-
 <h3 style="font-size: 18px; color: #d4af37; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px; margin-bottom: 10px; display: inline-block;">الأسئلة الشائعة</h3>
 <ul style="padding-right: 20px; margin-bottom: 15px;">
-  <li style="margin-bottom: 8px;"><strong>{d.get('faq_1_q', 'هل العطر مناسب للاستخدام اليومي؟')}</strong><br>{d.get('faq_1_a', '')}</li>
-  <li style="margin-bottom: 8px;"><strong>{d.get('faq_2_q', 'هل يناسب فصل معين؟')}</strong><br>{d.get('faq_2_a', '')}</li>
-  <li style="margin-bottom: 8px;"><strong>{d.get('faq_3_q', 'ما مدى ثبات العطر على الجلد؟')}</strong><br>{d.get('faq_3_a', '')}</li>
-  <li style="margin-bottom: 8px;"><strong>هل المنتج أصلي؟</strong><br>نعم، جميع منتجات {a_tag} أصلية 100% مع ضمان ذهبي للأصالة والجودة.</li>
+  <li style="margin-bottom: 8px;"><strong>{d.get('faq_1_q', '')}</strong><br>{d.get('faq_1_a', '')}</li>
+  <li style="margin-bottom: 8px;"><strong>{d.get('faq_2_q', '')}</strong><br>{d.get('faq_2_a', '')}</li>
+  <li style="margin-bottom: 8px;"><strong>{d.get('faq_3_q', '')}</strong><br>{d.get('faq_3_a', '')}</li>
 </ul>
-
 <p style="margin-bottom: 15px;">{d.get('closing_paragraph', '')} اختر التميز، اختر {a_tag}.</p>
 </div>
 """
-    # تنظيف صارم 100% للأسطر الجديدة والمسافات الزائدة
     html_clean = html.replace("\n", "").replace("\r", "")
     html_clean = re.sub(r'\s{2,}', ' ', html_clean)
     return html_clean
 
 async def process_product(session, row_i, pname, active_keys, idx, model, store_name, store_link, semaphore, ws, desc_col):
-    """مهمة معالجة منتج واحد (تعمل بالتزامن مع مهام أخرى)"""
     num_keys = len(active_keys)
     current_key_index = idx % num_keys
     current_key = active_keys[current_key_index]
@@ -215,8 +200,7 @@ async def process_product(session, row_i, pname, active_keys, idx, model, store_
         return {"name": pname, "ok": True}
     return {"name": pname, "ok": False}
 
-async def run_batch_async(tasks, active_keys, model, store_name, store_link, concurrency_limit, progress_bar, status_text, ws, desc_col):
-    """إدارة المهام المتزامنة وتحديث الواجهة"""
+async def run_batch_async(tasks, active_keys, model, store_name, store_link, concurrency_limit, sleep_time, progress_bar, status_text, download_placeholder, ws, wb, desc_col):
     semaphore = asyncio.Semaphore(concurrency_limit)
     total = len(tasks)
     results = []
@@ -228,18 +212,24 @@ async def run_batch_async(tasks, active_keys, model, store_name, store_link, con
             coro = process_product(session, row_i, pname, active_keys, idx, model, store_name, store_link, semaphore, ws, desc_col)
             coroutines.append(coro)
 
-        # تنفيذ المهام وتحديث شريط التقدم فور اكتمال أي منتج
         for future in asyncio.as_completed(coroutines):
             res = await future
             results.append(res)
             completed += 1
             progress_bar.progress(completed / total)
-            status_text.markdown(f'<div class="product-item">⚡ <strong>تم إنجاز ({completed}/{total}) منتج بنجاح..</strong><br>آخر منتج تمت معالجته: {res["name"]}</div>', unsafe_allow_html=True)
+            status_text.markdown(f'<div class="product-item">⚡ <strong>تم إنجاز ({completed}/{total}) منتج بنجاح..</strong><br>آخر منتج: {res["name"]}</div>', unsafe_allow_html=True)
+            
+            # تحديث رابط التحميل الحي كل 5 منتجات أو عند الانتهاء
+            if completed % 5 == 0 or completed == total:
+                live_link = get_realtime_download_link(wb, completed, total)
+                download_placeholder.markdown(live_link, unsafe_allow_html=True)
+            
+            # تأخير بسيط لضمان عدم حظر المفاتيح
+            await asyncio.sleep(sleep_time)
 
     return results
 
-def process_file_manager(uploaded, active_keys, model, store_name, store_link, process_all, start_skip, batch_size, concurrency_limit, bar, status):
-    """المدير الرئيسي لعمليات الملف والحفظ الطارئ"""
+def process_file_manager(uploaded, active_keys, model, store_name, store_link, process_all, start_skip, batch_size, concurrency_limit, sleep_time, bar, status, download_placeholder):
     raw = uploaded.getvalue()
     wb = openpyxl.load_workbook(io.BytesIO(raw))
     ws = wb.active
@@ -261,24 +251,20 @@ def process_file_manager(uploaded, active_keys, model, store_name, store_link, p
     if len(tasks) == 0:
         return None, [], 0
 
-    # بدء تشغيل الحلقة اللامتزامنة (Asyncio Event Loop)
     results = []
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         results = loop.run_until_complete(
-            run_batch_async(tasks, active_keys, model, store_name, store_link, concurrency_limit, bar, status, ws, desc_col)
+            run_batch_async(tasks, active_keys, model, store_name, store_link, concurrency_limit, sleep_time, bar, status, download_placeholder, ws, wb, desc_col)
         )
     except Exception as e:
-        st.warning(f"⚠️ توقف طارئ بسبب الضغط، ولكن تم حفظ تقدمك بأمان!")
+        st.warning("⚠️ تم إيقاف العملية، ولكن تقدمك محفوظ.")
     finally:
         loop.close()
-        
-        # حفظ الملف في كل الأحوال (نجاح أو فشل)
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
-        
         success_count = sum(1 for r in results if r["ok"])
         return buf, results, success_count
 
@@ -287,50 +273,46 @@ def process_file_manager(uploaded, active_keys, model, store_name, store_link, p
 # ══════════════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.markdown("### ⚙️ الإعدادات المتقدمة (Enterprise)")
-    batch_size = st.number_input("الحد الأقصى للمنتجات في الدفعة:", min_value=1, max_value=3000, value=500, help="بفضل السرعة الجديدة، يمكنك رفع الدفعة حتى 500 أو 1000.")
-    concurrency_limit = st.slider("عدد الطلبات المتزامنة (السرعة):", min_value=1, max_value=15, value=5, help="كلما زاد الرقم، زادت السرعة، لكن قد يسبب حظر مؤقت من جوجل.")
-    start_skip = st.number_input("تخطي أول (X) منتج:", min_value=0, value=0)
+    st.markdown("### 🔑 مفاتيح API (دعم لا نهائي)")
+    st.caption("ضع جميع مفاتيحك هنا (Google أو OpenRouter). كل مفتاح في سطر جديد:")
+    keys_input = st.text_area("المفاتيح:", height=150, placeholder="sk-or-...\nAIza...\nsk-or-...")
+    active_keys = [k.strip() for k in keys_input.split('\n') if k.strip()]
+    
+    model_name = st.selectbox("النموذج", list(MODELS.keys()))
 
     st.markdown("---")
-    st.markdown("### 🔑 مفاتيح API")
-    key1 = st.text_input("المفتاح الأول", type="password")
-    key2 = st.text_input("المفتاح الثاني", type="password")
-    key3 = st.text_input("المفتاح الثالث", type="password")
-    active_keys = [k.strip() for k in [key1, key2, key3] if k.strip()]
-    model_name = st.selectbox("النموذج", list(MODELS.keys()))
+    st.markdown("### ⚙️ إعدادات السرعة الصاروخية")
+    batch_size = st.number_input("حجم الدفعة:", min_value=1, max_value=5000, value=1000)
+    concurrency_limit = st.slider("عدد الطلبات المتزامنة:", min_value=1, max_value=30, value=10, help="كلما زاد الرقم والمفاتيح زادت السرعة بشكل جنوني.")
+    sleep_time = st.slider("الانتظار بين الطلبات (ثواني):", min_value=0.0, max_value=5.0, value=0.5, step=0.5)
+    start_skip = st.number_input("تخطي أول (X) منتج:", min_value=0, value=0)
 
     st.markdown("---")
     st.markdown("### 🏪 بيانات المتجر")
     store_name = st.text_input("اسم المتجر", value="لي غابريال")
     store_link = st.text_input("رابط المتجر", value="https://legabreil.com/ar")
-
-    st.markdown("---")
-    process_mode = st.radio("خيارات المعالجة:", ["المنتجات الفارغة فقط", "الكل (إعادة كتابة)"], index=0)
+    process_mode = st.radio("الخيارات:", ["المنتجات الفارغة فقط", "الكل (إعادة كتابة)"], index=0)
     process_all = (process_mode == "الكل (إعادة كتابة)")
 
 # ══════════════════════════════════════════════════════════════
 #  الواجهة الرئيسية
 # ══════════════════════════════════════════════════════════════
 
-st.title("⚡ مولّد أوصاف العطور (النسخة الصاروخية)")
-st.info("🚀 تم ترقية التطبيق ليعمل بنظام (Asynchronous) المتزامن. أصبح التطبيق يعالج المنتجات بأضعاف السرعة السابقة مع ضمان الحفظ التلقائي.")
+st.title("⚡ مولّد أوصاف العطور (صاروخ الأداء + التحميل الحي)")
+st.info("🚀 يمكنك الآن وضع 10 أو 20 مفتاحاً في الشريط الجانبي لتصل لأقصى سرعة ممكنة. كما يمكنك تحميل الملف أثناء عمل الأداة بدون إيقافها!")
 
 uploaded = st.file_uploader("ارفع ملف المنتجات (Excel)", type=["xlsx"])
 
 if uploaded:
     df = pd.read_excel(uploaded, header=1)
-    
-    total_products = len(df)
-    empty_desc = df["الوصف"].apply(is_empty).sum()
-    target_count = total_products if process_all else empty_desc
+    target_count = len(df) if process_all else df["الوصف"].apply(is_empty).sum()
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("📦 إجمالي المنتجات", total_products)
-    c2.metric("📝 المنتجات المستهدفة إجمالاً", target_count)
-    c3.metric("🎯 سيعالج في هذه الدفعة", min(target_count - start_skip, batch_size))
+    c1.metric("📦 المنتجات", len(df))
+    c2.metric("🎯 المستهدف", target_count)
+    c3.metric("🔑 عدد المفاتيح المضافة", len(active_keys))
 
-    if st.button("🚀 ابدأ المعالجة السريعة الآن", type="primary"):
+    if st.button("🚀 ابدأ المعالجة الصاروخية", type="primary"):
         if not active_keys:
             st.error("❌ الرجاء إدخال مفتاح API واحد على الأقل.")
         elif target_count == 0:
@@ -338,25 +320,19 @@ if uploaded:
         else:
             bar = st.progress(0)
             status = st.empty()
+            download_placeholder = st.empty() # مكان الزر الحي
             
             buf, results, success = process_file_manager(
                 uploaded, active_keys, MODELS[model_name], 
-                store_name, store_link, process_all, start_skip, batch_size, concurrency_limit, bar, status
+                store_name, store_link, process_all, start_skip, batch_size, concurrency_limit, sleep_time, bar, status, download_placeholder
             )
             
             bar.progress(100)
             status.empty()
+            download_placeholder.empty() # إخفاء الزر الحي لإظهار الزر النهائي
             
             if len(results) > 0:
-                st.success(f"✅ اكتملت الدفعة بنجاح! تمت صياغة {success} وصف جديد.")
-                st.download_button(
-                    "📥 تحميل الملف المحدّث وحفظ التقدم",
-                    data=buf,
-                    file_name="products_batch_fast_async.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-                if success < len(results):
-                    st.warning(f"ملاحظة: كان هناك {len(results)-success} منتج لم يتم التعرف عليها من قبل الذكاء الاصطناعي، يمكنك إعادة رفع الملف لاحقاً لإعادة محاولتها.")
+                st.success(f"✅ اكتملت العملية! تمت صياغة {success} وصف.")
+                st.download_button("📥 تحميل الملف النهائي", data=buf, file_name="products_completed.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             else:
-                st.error("❌ لم يتم توليد أي بيانات. تأكد من صحة مفاتيح الـ API.")
+                st.error("❌ حدث خطأ في معالجة المنتجات.")
